@@ -100,7 +100,7 @@ export default function App() {
                 setNumFilesProcessed((prev) => prev + pendingUpdates.filesProcessedCount);
             }
             if (pendingUpdates.logsToAdd.length > 0) {
-                const logsToPrepend = [...pendingUpdates.logsToAdd];
+                const logsToPrepend = [...pendingUpdates.logsToAdd].reverse();
                 setLogs((prev) => {
                     return [...logsToPrepend, ...prev].slice(0, 100);
                 });
@@ -116,8 +116,10 @@ export default function App() {
             frameScheduled = false;
         };
 
+        let disposed = false;
+
         const setupListeners = async () => {
-            unlistenTick = await listen<TransferTick>('transfer-tick', (event) => {
+            const tickUnlisten = await listen<TransferTick>('transfer-tick', (event) => {
                 const { current_file, progress: tickProgress, speed: tickSpeed, log_line } = event.payload;
 
                 if (current_file) {
@@ -139,7 +141,10 @@ export default function App() {
                     const status = tickProgress ? "[ACTIVE]" : "[COPIED]";
                     const filename = current_file || log_line.trim();
 
-                    pendingUpdates.logsToAdd.unshift({ id: logCounter++, time, status, filename });
+                    pendingUpdates.logsToAdd.push({ id: logCounter++, time, status, filename });
+                    if (pendingUpdates.logsToAdd.length > 100) {
+                        pendingUpdates.logsToAdd.shift();
+                    }
                 }
 
                 if (!frameScheduled) {
@@ -148,7 +153,13 @@ export default function App() {
                 }
             });
 
-            unlistenComplete = await listen('transfer-complete', () => {
+            unlistenTick = tickUnlisten;
+            if (disposed) {
+                tickUnlisten();
+                return;
+            }
+
+            const completeUnlisten = await listen('transfer-complete', () => {
                 if (frameScheduled) {
                     cancelAnimationFrame(animationFrameId);
                     flushUpdates();
@@ -158,11 +169,18 @@ export default function App() {
                 setCurrentFile("Transfer fully completed.");
                 setProgressStr("100%");
             });
+
+            unlistenComplete = completeUnlisten;
+            if (disposed) {
+                completeUnlisten();
+                return;
+            }
         };
 
         setupListeners();
 
         return () => {
+            disposed = true;
             if (unlistenTick) unlistenTick();
             if (unlistenComplete) unlistenComplete();
             if (frameScheduled) cancelAnimationFrame(animationFrameId);
@@ -243,6 +261,8 @@ export default function App() {
     const getFlagTooltip = (flag: string) => FLAG_CONFIG[flag]?.tooltip || "";
 
     const generatedCommand = `robocopy "${sourcePath}" "${destPath}" ${activeFlags.length > 0 ? activeFlags.join(' ') + ' ' : ''}/V /TS /FP /LOG:robolog.txt`;
+
+    const speedParts = speed.split(' ');
 
     return (
         <>
@@ -345,7 +365,7 @@ export default function App() {
                             <div className="space-y-1">
                                 <div className="text-[10px] font-mono text-on-surface-variant uppercase tracking-widest">Network Throughput</div>
                                 <div className="text-2xl lg:text-4xl font-headline font-black text-on-surface">
-                                    {speed.split(' ')[0] || speed} <span className="text-sm font-normal text-primary">{speed.split(' ').slice(1).join(' ')}</span>
+                                    {speedParts[0] || speed} <span className="text-sm font-normal text-primary">{speedParts.slice(1).join(' ')}</span>
                                 </div>
                             </div>
                             <div className="space-y-1">
