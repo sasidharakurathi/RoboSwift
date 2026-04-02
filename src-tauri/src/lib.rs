@@ -93,6 +93,10 @@ fn start_transfer(
         let re_progress = Regex::new(r"(\d+\.?\d+%)").unwrap();
         let re_speed = Regex::new(r"(\d+\.?\d*\s*[KMG]?/?Sec)").unwrap();
 
+        let mut batch = Vec::new();
+        let mut last_emit = std::time::Instant::now();
+        let emit_interval = std::time::Duration::from_millis(100);
+
         for line in reader.lines() {
             if let Ok(line_str) = line {
                 let progress = re_progress
@@ -122,8 +126,18 @@ fn start_transfer(
                     log_line: line_str.clone(),
                 };
 
-                let _ = app_clone.emit("transfer-tick", tick);
+                batch.push(tick);
+
+                if last_emit.elapsed() >= emit_interval {
+                    let emitted_batch = std::mem::take(&mut batch);
+                    let _ = app_clone.emit("transfer-tick-batch", emitted_batch);
+                    last_emit = std::time::Instant::now();
+                }
             }
+        }
+
+        if !batch.is_empty() {
+            let _ = app_clone.emit("transfer-tick-batch", batch);
         }
 
         let _ = child.wait();
