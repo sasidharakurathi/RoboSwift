@@ -19,6 +19,16 @@ struct TransferTick {
     log_line: String,
 }
 
+fn is_valid_flag(flag: &str) -> bool {
+    let flag_upper = flag.to_uppercase();
+    match flag_upper.as_str() {
+        "/MIR" | "/Z" | "/XO" | "/S" | "/SEC" | "/ETA" | "/MT" => true,
+        _ if flag_upper.starts_with("/MT:") => flag_upper[4..].parse::<u32>().is_ok(),
+        _ if flag_upper.starts_with("/W:") => flag_upper[3..].parse::<u32>().is_ok(),
+        _ => false,
+    }
+}
+
 #[tauri::command]
 fn start_transfer(
     app: AppHandle,
@@ -27,6 +37,22 @@ fn start_transfer(
     destination: String,
     flags: Vec<String>,
 ) -> Result<(), String> {
+    let source = source.trim();
+    let destination = destination.trim();
+
+    if source.is_empty() || source.starts_with('/') {
+        return Err("Invalid source path: cannot be empty or start with '/'".into());
+    }
+    if destination.is_empty() || destination.starts_with('/') {
+        return Err("Invalid destination path: cannot be empty or start with '/'".into());
+    }
+
+    for flag in &flags {
+        if !is_valid_flag(flag) {
+            return Err(format!("Invalid or disallowed flag: {}", flag));
+        }
+    }
+
     {
         let pid_guard = state.child_pid.lock().unwrap();
         if pid_guard.is_some() {
@@ -155,4 +181,32 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_valid_flag() {
+        assert!(is_valid_flag("/MIR"));
+        assert!(is_valid_flag("/mir"));
+        assert!(is_valid_flag("/Z"));
+        assert!(is_valid_flag("/XO"));
+        assert!(is_valid_flag("/S"));
+        assert!(is_valid_flag("/SEC"));
+        assert!(is_valid_flag("/ETA"));
+        assert!(is_valid_flag("/MT"));
+        assert!(is_valid_flag("/MT:16"));
+        assert!(is_valid_flag("/MT:128"));
+        assert!(is_valid_flag("/W:5"));
+        assert!(is_valid_flag("/W:0"));
+
+        assert!(!is_valid_flag("/LOG:C:\\malicious.txt"));
+        assert!(!is_valid_flag("/MT:abc"));
+        assert!(!is_valid_flag("/W:"));
+        assert!(!is_valid_flag("/R:1"));
+        assert!(!is_valid_flag(""));
+        assert!(!is_valid_flag("/JOB:malicious"));
+    }
 }
