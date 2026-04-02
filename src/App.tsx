@@ -21,6 +21,41 @@ interface LogEntry {
 
 let logCounter = 0;
 
+const FLAG_CONFIG: Record<string, { icon: string; tooltip: string }> = {
+    '/MIR': {
+        icon: 'check_circle',
+        tooltip: 'Mirror Mode. Copies all subdirectories and DELETES files in destination that no longer exist in source.'
+    },
+    '/MT:16': {
+        icon: 'bolt',
+        tooltip: 'Multi-threaded (16 cores). Significantly speeds up transfer by copying multiple files simultaneously.'
+    },
+    '/Z': {
+        icon: 'verified_user',
+        tooltip: 'Restartable Mode. Allows robocopy to resume a partially completed file transfer after a network failure.'
+    },
+    '/XO': {
+        icon: 'update',
+        tooltip: 'Exclude Older. Skips files in the source that are older than the ones already in the destination.'
+    },
+    '/S': {
+        icon: 'subtitles',
+        tooltip: 'Subdirectories. Copies all subdirectories but excludes empty ones.'
+    },
+    '/SEC': {
+        icon: 'security',
+        tooltip: 'Copy Security. Preserves NTFS permissions, ownership, and auditing information (ACLs).'
+    },
+    '/W:5': {
+        icon: 'timer',
+        tooltip: 'Wait Time (5s). Sets the duration to wait between retries if a file copy fails.'
+    },
+    '/ETA': {
+        icon: 'rule',
+        tooltip: 'Show Estimated Time. Displays the approximate time remaining for the current file transfer.'
+    }
+};
+
 export default function App() {
     const [sourcePath, setSourcePath] = useState("C:\\Users\\Admin\\Production\\Assets_2024");
     const [destPath, setDestPath] = useState("Z:\\Backups\\Daily_Archive\\Vault_01");
@@ -163,19 +198,7 @@ export default function App() {
             : `bg-surface-container-highest text-on-surface-variant p-3 rounded-sm text-xs font-bold flex flex-col gap-1 w-full h-full ${!isRunning && 'hover:bg-surface-container-high transition-colors'} ${disabledState}`;
     };
 
-    const getFlagTooltip = (flag: string) => {
-        switch (flag) {
-            case '/MIR': return "Mirror Mode. Copies all subdirectories and DELETES files in destination that no longer exist in source.";
-            case '/MT:16': return "Multi-threaded (16 cores). Significantly speeds up transfer by copying multiple files simultaneously.";
-            case '/Z': return "Restartable Mode. Allows robocopy to resume a partially completed file transfer after a network failure.";
-            case '/XO': return "Exclude Older. Skips files in the source that are older than the ones already in the destination.";
-            case '/S': return "Subdirectories. Copies all subdirectories but excludes empty ones.";
-            case '/SEC': return "Copy Security. Preserves NTFS permissions, ownership, and auditing information (ACLs).";
-            case '/W:5': return "Wait Time (5s). Sets the duration to wait between retries if a file copy fails.";
-            case '/ETA': return "Show Estimated Time. Displays the approximate time remaining for the current file transfer.";
-            default: return "";
-        }
-    };
+    const getFlagTooltip = (flag: string) => FLAG_CONFIG[flag]?.tooltip || "";
 
     const generatedCommand = `robocopy "${sourcePath}" "${destPath}" ${activeFlags.length > 0 ? activeFlags.join(' ') + ' ' : ''}/V /TS /FP /LOG:robolog.txt`;
 
@@ -247,17 +270,11 @@ export default function App() {
                                 Execution Flags
                             </h2>
                             <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3">
-                                {['/MIR', '/MT:16', '/Z', '/XO', '/S', '/SEC', '/W:5', '/ETA'].map((flag) => (
+                                {Object.keys(FLAG_CONFIG).map((flag) => (
                                     <Tooltip key={flag} content={getFlagTooltip(flag)} className="w-full h-full">
                                         <button onClick={() => toggleFlag(flag)} disabled={isRunning} className={getFlagClass(flag)}>
                                             <span className="material-symbols-outlined text-sm">
-                                                {flag === '/MIR' ? 'check_circle' :
-                                                    flag === '/MT:16' ? 'bolt' :
-                                                        flag === '/Z' ? 'verified_user' :
-                                                            flag === '/XO' ? 'update' :
-                                                                flag === '/S' ? 'subtitles' :
-                                                                    flag === '/SEC' ? 'security' :
-                                                                        flag === '/W:5' ? 'timer' : 'rule'}
+                                                {FLAG_CONFIG[flag].icon}
                                             </span>
                                             {flag}
                                         </button>
