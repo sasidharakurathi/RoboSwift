@@ -61,7 +61,7 @@ fn start_transfer(
     }
 
     let mut command = Command::new("robocopy");
-    command.arg(&source).arg(&destination);
+    command.arg(source).arg(destination);
 
     for flag in flags {
         command.arg(&flag);
@@ -93,37 +93,39 @@ fn start_transfer(
         let re_progress = Regex::new(r"(\d+\.?\d+%)").unwrap();
         let re_speed = Regex::new(r"(\d+\.?\d*\s*[KMG]?/?Sec)").unwrap();
 
-        for line in reader.lines() {
-            if let Ok(line_str) = line {
-                let progress = re_progress
-                    .captures(&line_str)
-                    .and_then(|c| c.get(1))
-                    .map(|m| m.as_str().to_string());
+        for line_str in reader.lines().map_while(Result::ok) {
+            let progress = re_progress
+                .captures(&line_str)
+                .and_then(|c| c.get(1))
+                .map(|m| m.as_str().to_string());
 
-                let speed = re_speed
-                    .captures(&line_str)
-                    .and_then(|c| c.get(1))
-                    .map(|m| m.as_str().to_string());
+            let speed = re_speed
+                .captures(&line_str)
+                .and_then(|c| c.get(1))
+                .map(|m| m.as_str().to_string());
 
-                let trimmed = line_str.trim();
-                let mut current_file = None;
-                if !trimmed.is_empty() && trimmed.contains('\\') {
-                    let cleaned = re_progress.replace(trimmed, "").to_string();
-                    let cleaned = cleaned.trim().to_string();
-                    if !cleaned.is_empty() {
-                        current_file = Some(cleaned);
-                    }
-                }
-
-                let tick = TransferTick {
-                    current_file,
-                    progress,
-                    speed,
-                    log_line: line_str.clone(),
+            let trimmed = line_str.trim();
+            let mut current_file = None;
+            if !trimmed.is_empty() && trimmed.contains('\\') {
+                let cleaned = if let Some(ref p) = progress {
+                    trimmed.replace(p, "")
+                } else {
+                    trimmed.to_string()
                 };
-
-                let _ = app_clone.emit("transfer-tick", tick);
+                let cleaned = cleaned.trim().to_string();
+                if !cleaned.is_empty() {
+                    current_file = Some(cleaned);
+                }
             }
+
+            let tick = TransferTick {
+                current_file,
+                progress,
+                speed,
+                log_line: line_str.clone(),
+            };
+
+            let _ = app_clone.emit("transfer-tick", tick);
         }
 
         let _ = child.wait();
@@ -146,12 +148,10 @@ fn cancel_transfer(state: State<'_, TransferState>) -> Result<(), String> {
                 .creation_flags(0x08000000)
                 .status();
         }
-        
+
         #[cfg(not(target_os = "windows"))]
         {
-            let _ = Command::new("kill")
-                .args(["-9", &pid.to_string()])
-                .status();
+            let _ = Command::new("kill").args(["-9", &pid.to_string()]).status();
         }
 
         *pid_guard = None;

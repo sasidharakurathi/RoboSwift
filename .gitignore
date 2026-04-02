@@ -28,3 +28,8 @@ src-tauri/remote
 
 # Build Output
 robolog.txt
+
+/target
+/src/main.rs
+/Cargo.toml
+/Cargo.lock
