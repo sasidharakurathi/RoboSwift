@@ -100,7 +100,7 @@ export default function App() {
                     const status = tickProgress ? "[ACTIVE]" : "[COPIED]";
 
                     // Use the file if parsed, or fallback to line log
-                    let filename = current_file || log_line.trim();
+                    const filename = current_file || log_line.trim();
 
                     setLogs((prev) => {
                         const newLog = { id: logCounter++, time, status, filename };
@@ -200,6 +200,8 @@ export default function App() {
     const getFlagTooltip = (flag: string) => FLAG_CONFIG[flag]?.tooltip || "";
 
     const generatedCommand = `robocopy "${sourcePath}" "${destPath}" ${activeFlags.length > 0 ? activeFlags.join(' ') + ' ' : ''}/V /TS /FP /LOG:robolog.txt`;
+
+    const speedParts = speed.split(' ');
 
     return (
         <>
@@ -302,7 +304,7 @@ export default function App() {
                             <div className="space-y-1">
                                 <div className="text-[10px] font-mono text-on-surface-variant uppercase tracking-widest">Network Throughput</div>
                                 <div className="text-2xl lg:text-4xl font-headline font-black text-on-surface">
-                                    {speed.split(' ')[0] || speed} <span className="text-sm font-normal text-primary">{speed.split(' ').slice(1).join(' ')}</span>
+                                    {speedParts[0] || speed} <span className="text-sm font-normal text-primary">{speedParts.slice(1).join(' ')}</span>
                                 </div>
                             </div>
                             <div className="space-y-1">
