@@ -76,41 +76,83 @@ export default function App() {
         let unlistenTick: (() => void) | undefined;
         let unlistenComplete: (() => void) | undefined;
 
+        let animationFrameId: number;
+        let pendingUpdates = {
+            currentFile: null as string | null,
+            progressStr: null as string | null,
+            speed: null as string | null,
+            logsToAdd: [] as LogEntry[],
+            filesProcessedCount: 0,
+        };
+        let frameScheduled = false;
+
+        const flushUpdates = () => {
+            if (pendingUpdates.currentFile !== null) {
+                setCurrentFile(pendingUpdates.currentFile);
+            }
+            if (pendingUpdates.progressStr !== null) {
+                setProgressStr(pendingUpdates.progressStr);
+            }
+            if (pendingUpdates.speed !== null) {
+                setSpeed(pendingUpdates.speed);
+            }
+            if (pendingUpdates.filesProcessedCount > 0) {
+                setNumFilesProcessed((prev) => prev + pendingUpdates.filesProcessedCount);
+            }
+            if (pendingUpdates.logsToAdd.length > 0) {
+                const logsToPrepend = [...pendingUpdates.logsToAdd];
+                setLogs((prev) => {
+                    return [...logsToPrepend, ...prev].slice(0, 100);
+                });
+            }
+
+            pendingUpdates = {
+                currentFile: null,
+                progressStr: null,
+                speed: null,
+                logsToAdd: [],
+                filesProcessedCount: 0,
+            };
+            frameScheduled = false;
+        };
+
         const setupListeners = async () => {
             unlistenTick = await listen<TransferTick>('transfer-tick', (event) => {
                 const { current_file, progress: tickProgress, speed: tickSpeed, log_line } = event.payload;
 
                 if (current_file) {
-                    setCurrentFile(current_file);
+                    pendingUpdates.currentFile = current_file;
                 }
 
                 if (tickProgress) {
-                    setProgressStr(tickProgress);
+                    pendingUpdates.progressStr = tickProgress;
                 }
 
                 if (tickSpeed) {
-                    setSpeed(tickSpeed);
+                    pendingUpdates.speed = tickSpeed;
                 }
 
                 if (log_line.trim().length > 0) {
-                    setNumFilesProcessed(prev => prev + 1);
+                    pendingUpdates.filesProcessedCount += 1;
 
                     const time = new Date().toLocaleTimeString('en-US', { hour12: false });
-                    // Basic heuristic: if there's progress, it's active. If it's a new file without progress, it was skipped or copied.
                     const status = tickProgress ? "[ACTIVE]" : "[COPIED]";
+                    const filename = current_file || log_line.trim();
 
-                    // Use the file if parsed, or fallback to line log
-                    let filename = current_file || log_line.trim();
+                    pendingUpdates.logsToAdd.unshift({ id: logCounter++, time, status, filename });
+                }
 
-                    setLogs((prev) => {
-                        const newLog = { id: logCounter++, time, status, filename };
-                        // Only keep last 100 items for scroll history
-                        return [newLog, ...prev.slice(0, 99)];
-                    });
+                if (!frameScheduled) {
+                    frameScheduled = true;
+                    animationFrameId = requestAnimationFrame(flushUpdates);
                 }
             });
 
             unlistenComplete = await listen('transfer-complete', () => {
+                if (frameScheduled) {
+                    cancelAnimationFrame(animationFrameId);
+                    flushUpdates();
+                }
                 setIsRunning(false);
                 setIsCompleted(true);
                 setCurrentFile("Transfer fully completed.");
@@ -123,6 +165,7 @@ export default function App() {
         return () => {
             if (unlistenTick) unlistenTick();
             if (unlistenComplete) unlistenComplete();
+            if (frameScheduled) cancelAnimationFrame(animationFrameId);
         };
     }, []);
 
