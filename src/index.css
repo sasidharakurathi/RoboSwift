@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+@theme {
+  --color-surface-container-highest: #262626;
+  --color-on-primary-container: #00214f;
+  --color-inverse-on-surface: #565554;
+  --color-on-primary-fixed-variant: #002a61;
+  --color-on-error-container: #ffa8a3;
+  --color-on-primary-fixed: #000000;
+  --color-primary-dim: #0070eb;
+  --color-surface-container-lowest: #000000;
+  --color-surface-container: #1a1919;
+  --color-tertiary-fixed-dim: #e48fec;
+  --color-tertiary-dim: #e48fec;
+  --color-surface-container-low: #131313;
+  --color-background: #0e0e0e;
+  --color-error-dim: #d7383b;
+  --color-on-tertiary: #6b1f77;
+  --color-secondary-fixed: #c6cfff;
+  --color-inverse-primary: #005bc2;
+  --color-on-secondary-fixed-variant: #2c48ac;
+  --color-primary-fixed: #6c9fff;
+  --color-secondary-container: #1f3da1;
+  --color-tertiary: #fab0ff;
+  --color-on-secondary: #00185e;
+  --color-tertiary-container: #f39cfb;
+  --color-secondary-fixed-dim: #b4c1ff;
+  --color-on-secondary-container: #c5ceff;
+  --color-outline: #777575;
+  --color-outline-variant: #494847;
+  --color-secondary: #7f98ff;
+  --color-on-error: #490006;
+  --color-on-tertiary-fixed-variant: #6a1f76;
+  --color-on-tertiary-fixed: #41004d;
+  --color-on-surface: #ffffff;
+  --color-on-secondary-fixed: #00288d;
+  --color-on-background: #ffffff;
+  --color-on-tertiary-container: #60136d;
+  --color-primary-fixed-dim: #5191ff;
+  --color-error-container: #9f0519;
+  --color-secondary-dim: #7f98ff;
+  --color-surface-container-high: #201f1f;
+  --color-error: #ff716c;
+  --color-surface-dim: #0e0e0e;
+  --color-inverse-surface: #fcf8f8;
+  --color-surface-variant: #262626;
+  --color-on-primary: #002c65;
+  --color-surface: #0e0e0e;
+  --color-tertiary-fixed: #f39cfb;
+  --color-surface-bright: #2c2c2c;
+  --color-on-surface-variant: #adaaaa;
+  --color-surface-tint: #85adff;
+  --color-primary-container: #6c9fff;
+  --color-primary: #85adff;
+
+  --font-headline: "Space Grotesk", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-label: "Inter", sans-serif;
+
+  --radius-DEFAULT: 0.125rem;
+  --radius-lg: 0.25rem;
+  --radius-xl: 0.5rem;
+  --radius-full: 0.75rem;
+}
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+}
+
+.kinetic-gradient {
+  background: linear-gradient(135deg, #0070eb 0%, #85adff 100%);
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0e0e0e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #262626;
+  border-radius: 2px;
+}
