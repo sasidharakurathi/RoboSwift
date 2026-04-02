@@ -1,11 +1,15 @@
 use regex::Regex;
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
+
+static RE_PROGRESS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(\d+\.?\d+%)").unwrap());
+static RE_SPEED: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(\d+\.?\d*\s*[KMG]?/?Sec)").unwrap());
 
 pub struct TransferState {
     pub child_pid: Mutex<Option<u32>>,
@@ -61,7 +65,7 @@ fn start_transfer(
     }
 
     let mut command = Command::new("robocopy");
-    command.arg(&source).arg(&destination);
+    command.arg(source).arg(destination);
 
     for flag in flags {
         command.arg(&flag);
@@ -90,40 +94,36 @@ fn start_transfer(
 
     std::thread::spawn(move || {
         let reader = BufReader::new(stdout);
-        let re_progress = Regex::new(r"(\d+\.?\d+%)").unwrap();
-        let re_speed = Regex::new(r"(\d+\.?\d*\s*[KMG]?/?Sec)").unwrap();
 
-        for line in reader.lines() {
-            if let Ok(line_str) = line {
-                let progress = re_progress
-                    .captures(&line_str)
-                    .and_then(|c| c.get(1))
-                    .map(|m| m.as_str().to_string());
+        for line_str in reader.lines().map_while(Result::ok) {
+            let progress = RE_PROGRESS
+                .captures(&line_str)
+                .and_then(|c| c.get(1))
+                .map(|m| m.as_str().to_string());
 
-                let speed = re_speed
-                    .captures(&line_str)
-                    .and_then(|c| c.get(1))
-                    .map(|m| m.as_str().to_string());
+            let speed = RE_SPEED
+                .captures(&line_str)
+                .and_then(|c| c.get(1))
+                .map(|m| m.as_str().to_string());
 
-                let trimmed = line_str.trim();
-                let mut current_file = None;
-                if !trimmed.is_empty() && trimmed.contains('\\') {
-                    let cleaned = re_progress.replace(trimmed, "").to_string();
-                    let cleaned = cleaned.trim().to_string();
-                    if !cleaned.is_empty() {
-                        current_file = Some(cleaned);
-                    }
+            let trimmed = line_str.trim();
+            let mut current_file = None;
+            if !trimmed.is_empty() && trimmed.contains('\\') {
+                let cleaned = RE_PROGRESS.replace(trimmed, "").to_string();
+                let cleaned = cleaned.trim().to_string();
+                if !cleaned.is_empty() {
+                    current_file = Some(cleaned);
                 }
-
-                let tick = TransferTick {
-                    current_file,
-                    progress,
-                    speed,
-                    log_line: line_str.clone(),
-                };
-
-                let _ = app_clone.emit("transfer-tick", tick);
             }
+
+            let tick = TransferTick {
+                current_file,
+                progress,
+                speed,
+                log_line: line_str.clone(),
+            };
+
+            let _ = app_clone.emit("transfer-tick", tick);
         }
 
         let _ = child.wait();
@@ -146,12 +146,10 @@ fn cancel_transfer(state: State<'_, TransferState>) -> Result<(), String> {
                 .creation_flags(0x08000000)
                 .status();
         }
-        
+
         #[cfg(not(target_os = "windows"))]
         {
-            let _ = Command::new("kill")
-                .args(["-9", &pid.to_string()])
-                .status();
+            let _ = Command::new("kill").args(["-9", &pid.to_string()]).status();
         }
 
         *pid_guard = None;
