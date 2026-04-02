@@ -69,9 +69,8 @@ export default function App() {
 
                     setLogs((prev) => {
                         const newLog = { id: logCounter++, time, status, filename };
-                        const nextList = [newLog, ...prev];
                         // Only keep last 100 items for scroll history
-                        return nextList.slice(0, 100);
+                        return [newLog, ...prev.slice(0, 99)];
                     });
                 }
             });
