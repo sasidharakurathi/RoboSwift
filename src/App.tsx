@@ -77,36 +77,46 @@ export default function App() {
         let unlistenComplete: (() => void) | undefined;
 
         const setupListeners = async () => {
-            unlistenTick = await listen<TransferTick>('transfer-tick', (event) => {
-                const { current_file, progress: tickProgress, speed: tickSpeed, log_line } = event.payload;
+            unlistenTick = await listen<TransferTick[]>('transfer-tick', (event) => {
+                const ticks = event.payload;
+                if (!ticks || ticks.length === 0) return;
 
-                if (current_file) {
-                    setCurrentFile(current_file);
+                let latestCurrentFile: string | null = null;
+                let latestProgress: string | null = null;
+                let latestSpeed: string | null = null;
+
+                const newLogs: LogEntry[] = [];
+                let newFilesProcessedCount = 0;
+                const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+
+                for (const tick of ticks) {
+                    if (tick.current_file) latestCurrentFile = tick.current_file;
+                    if (tick.progress) latestProgress = tick.progress;
+                    if (tick.speed) latestSpeed = tick.speed;
+
+                    if (tick.log_line.trim().length > 0) {
+                        newFilesProcessedCount++;
+                        const status = tick.progress ? "[ACTIVE]" : "[COPIED]";
+                        const filename = tick.current_file || tick.log_line.trim();
+                        newLogs.unshift({ id: logCounter++, time, status, filename });
+                    }
                 }
 
-                if (tickProgress) {
-                    setProgressStr(tickProgress);
+                if (latestCurrentFile) {
+                    setCurrentFile(latestCurrentFile);
                 }
 
-                if (tickSpeed) {
-                    setSpeed(tickSpeed);
+                if (latestProgress) {
+                    setProgressStr(latestProgress);
                 }
 
-                if (log_line.trim().length > 0) {
-                    setNumFilesProcessed(prev => prev + 1);
+                if (latestSpeed) {
+                    setSpeed(latestSpeed);
+                }
 
-                    const time = new Date().toLocaleTimeString('en-US', { hour12: false });
-                    // Basic heuristic: if there's progress, it's active. If it's a new file without progress, it was skipped or copied.
-                    const status = tickProgress ? "[ACTIVE]" : "[COPIED]";
-
-                    // Use the file if parsed, or fallback to line log
-                    const filename = current_file || log_line.trim();
-
-                    setLogs((prev) => {
-                        const newLog = { id: logCounter++, time, status, filename };
-                        // Only keep last 100 items for scroll history
-                        return [newLog, ...prev.slice(0, 99)];
-                    });
+                if (newFilesProcessedCount > 0) {
+                    setNumFilesProcessed(prev => prev + newFilesProcessedCount);
+                    setLogs((prev) => [...newLogs, ...prev].slice(0, 100));
                 }
             });
 
