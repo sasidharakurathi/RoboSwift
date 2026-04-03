@@ -1,11 +1,15 @@
 use regex::Regex;
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
+
+static RE_PROGRESS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(\d+\.?\d+%)").unwrap());
+static RE_SPEED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(\d+\.?\d*\s*[KMG]?/?Sec)").unwrap());
 
 pub struct TransferState {
     pub child_pid: Mutex<Option<u32>>,
@@ -90,17 +94,19 @@ fn start_transfer(
 
     std::thread::spawn(move || {
         let reader = BufReader::new(stdout);
-        let re_progress = Regex::new(r"(\d+\.?\d+%)").unwrap();
-        let re_speed = Regex::new(r"(\d+\.?\d*\s*[KMG]?/?Sec)").unwrap();
+
+        let mut ticks = Vec::new();
+        let mut last_emit = Instant::now();
+        let emit_interval = Duration::from_millis(50);
 
         for line in reader.lines() {
             if let Ok(line_str) = line {
-                let progress = re_progress
+                let progress = RE_PROGRESS
                     .captures(&line_str)
                     .and_then(|c| c.get(1))
                     .map(|m| m.as_str().to_string());
 
-                let speed = re_speed
+                let speed = RE_SPEED
                     .captures(&line_str)
                     .and_then(|c| c.get(1))
                     .map(|m| m.as_str().to_string());
@@ -108,7 +114,7 @@ fn start_transfer(
                 let trimmed = line_str.trim();
                 let mut current_file = None;
                 if !trimmed.is_empty() && trimmed.contains('\\') {
-                    let cleaned = re_progress.replace(trimmed, "").to_string();
+                    let cleaned = RE_PROGRESS.replace(trimmed, "").to_string();
                     let cleaned = cleaned.trim().to_string();
                     if !cleaned.is_empty() {
                         current_file = Some(cleaned);
@@ -122,8 +128,18 @@ fn start_transfer(
                     log_line: line_str.clone(),
                 };
 
-                let _ = app_clone.emit("transfer-tick", tick);
+                ticks.push(tick);
+
+                if ticks.len() >= 50 || last_emit.elapsed() >= emit_interval {
+                    let _ = app_clone.emit("transfer-tick", &ticks);
+                    ticks.clear();
+                    last_emit = Instant::now();
+                }
             }
+        }
+
+        if !ticks.is_empty() {
+            let _ = app_clone.emit("transfer-tick", &ticks);
         }
 
         let _ = child.wait();
