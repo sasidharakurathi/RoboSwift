@@ -1,0 +1,3 @@
+## 2025-04-04 - Ensure ARIA pressed state and input labels in custom components
+**Learning:** Custom toggle buttons and form inputs often lack native semantic bindings (`aria-pressed` for toggles, `htmlFor`/`id` for labels and inputs). This negatively impacts screen reader accessibility.
+**Action:** Always verify that toggle buttons indicate their state via `aria-pressed`, and that `<label>` tags use `htmlFor` matching the associated `<input id="..."/>`.

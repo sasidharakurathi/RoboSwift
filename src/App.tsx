@@ -215,9 +215,10 @@ export default function App() {
                         </div>
                         <div className="space-y-4">
                             <div className="group">
-                                <label className="block text-[10px] font-mono text-on-surface-variant mb-1 ml-1 uppercase tracking-widest">Source Directory</label>
+                                <label htmlFor="sourcePath" className="block text-[10px] font-mono text-on-surface-variant mb-1 ml-1 uppercase tracking-widest">Source Directory</label>
                                 <div className={`flex items-center gap-px bg-surface-container-low transition-colors border-b-2 border-transparent ${isRunning ? 'opacity-50' : 'focus-within:bg-surface-container-high focus-within:border-primary'}`}>
                                     <input
+                                        id="sourcePath"
                                         className="w-full bg-transparent border-none focus:ring-0 text-sm font-mono text-on-surface py-4 px-4 outline-none"
                                         placeholder="Select source folder..."
                                         type="text"
@@ -238,9 +239,10 @@ export default function App() {
                                 </div>
                             </div>
                             <div className="group">
-                                <label className="block text-[10px] font-mono text-on-surface-variant mb-1 ml-1 uppercase tracking-widest">Destination Node</label>
+                                <label htmlFor="destPath" className="block text-[10px] font-mono text-on-surface-variant mb-1 ml-1 uppercase tracking-widest">Destination Node</label>
                                 <div className={`flex items-center gap-px bg-surface-container-low transition-colors border-b-2 border-transparent ${isRunning ? 'opacity-50' : 'focus-within:bg-surface-container-high focus-within:border-primary'}`}>
                                     <input
+                                        id="destPath"
                                         className="w-full bg-transparent border-none focus:ring-0 text-sm font-mono text-on-surface py-4 px-4 outline-none"
                                         placeholder="Select destination folder..."
                                         type="text"
@@ -273,7 +275,7 @@ export default function App() {
                             <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3">
                                 {Object.keys(FLAG_CONFIG).map((flag) => (
                                     <Tooltip key={flag} content={getFlagTooltip(flag)} className="w-full h-full">
-                                        <button onClick={() => toggleFlag(flag)} disabled={isRunning} className={getFlagClass(flag)}>
+                                        <button aria-pressed={activeFlags.includes(flag)} onClick={() => toggleFlag(flag)} disabled={isRunning} className={getFlagClass(flag)}>
                                             <span className="material-symbols-outlined text-sm">
                                                 {FLAG_CONFIG[flag].icon}
                                             </span>
