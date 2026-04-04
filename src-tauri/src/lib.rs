@@ -1,7 +1,8 @@
 use regex::Regex;
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 #[cfg(target_os = "windows")]
@@ -90,17 +91,20 @@ fn start_transfer(
 
     std::thread::spawn(move || {
         let reader = BufReader::new(stdout);
-        let re_progress = Regex::new(r"(\d+\.?\d+%)").unwrap();
-        let re_speed = Regex::new(r"(\d+\.?\d*\s*[KMG]?/?Sec)").unwrap();
+        static RE_PROGRESS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(\d+\.?\d+%)").unwrap());
+        static RE_SPEED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(\d+\.?\d*\s*[KMG]?/?Sec)").unwrap());
+
+        let mut batch: Vec<TransferTick> = Vec::with_capacity(100);
+        let mut last_emit = Instant::now();
 
         for line in reader.lines() {
             if let Ok(line_str) = line {
-                let progress = re_progress
+                let progress = RE_PROGRESS
                     .captures(&line_str)
                     .and_then(|c| c.get(1))
                     .map(|m| m.as_str().to_string());
 
-                let speed = re_speed
+                let speed = RE_SPEED
                     .captures(&line_str)
                     .and_then(|c| c.get(1))
                     .map(|m| m.as_str().to_string());
@@ -108,7 +112,7 @@ fn start_transfer(
                 let trimmed = line_str.trim();
                 let mut current_file = None;
                 if !trimmed.is_empty() && trimmed.contains('\\') {
-                    let cleaned = re_progress.replace(trimmed, "").to_string();
+                    let cleaned = RE_PROGRESS.replace(trimmed, "").to_string();
                     let cleaned = cleaned.trim().to_string();
                     if !cleaned.is_empty() {
                         current_file = Some(cleaned);
@@ -119,11 +123,21 @@ fn start_transfer(
                     current_file,
                     progress,
                     speed,
-                    log_line: line_str.clone(),
+                    log_line: line_str,
                 };
 
-                let _ = app_clone.emit("transfer-tick", tick);
+                batch.push(tick);
+
+                if batch.len() >= 100 || last_emit.elapsed() >= Duration::from_millis(50) {
+                    let _ = app_clone.emit("transfer-tick", &batch);
+                    batch.clear();
+                    last_emit = Instant::now();
+                }
             }
+        }
+
+        if !batch.is_empty() {
+            let _ = app_clone.emit("transfer-tick", &batch);
         }
 
         let _ = child.wait();

@@ -77,35 +77,50 @@ export default function App() {
         let unlistenComplete: (() => void) | undefined;
 
         const setupListeners = async () => {
-            unlistenTick = await listen<TransferTick>('transfer-tick', (event) => {
-                const { current_file, progress: tickProgress, speed: tickSpeed, log_line } = event.payload;
+            unlistenTick = await listen<TransferTick[]>('transfer-tick', (event) => {
+                const ticks = event.payload;
+                if (!ticks || ticks.length === 0) return;
 
-                if (current_file) {
-                    setCurrentFile(current_file);
+                let latestFile = null;
+                let latestProgress = null;
+                let latestSpeed = null;
+
+                const newLogs: LogEntry[] = [];
+                let newFilesProcessedCount = 0;
+
+                for (const tick of ticks) {
+                    const { current_file, progress: tickProgress, speed: tickSpeed, log_line } = tick;
+
+                    if (current_file) latestFile = current_file;
+                    if (tickProgress) latestProgress = tickProgress;
+                    if (tickSpeed) latestSpeed = tickSpeed;
+
+                    if (log_line.trim().length > 0) {
+                        newFilesProcessedCount++;
+
+                        const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+                        const status = tickProgress ? "[ACTIVE]" : "[COPIED]";
+                        const filename = current_file || log_line.trim();
+
+                        newLogs.push({ id: logCounter++, time, status, filename });
+                    }
                 }
 
-                if (tickProgress) {
-                    setProgressStr(tickProgress);
+                if (latestFile) setCurrentFile(latestFile);
+                if (latestProgress) setProgressStr(latestProgress);
+                if (latestSpeed) setSpeed(latestSpeed);
+
+                if (newFilesProcessedCount > 0) {
+                    setNumFilesProcessed(prev => prev + newFilesProcessedCount);
                 }
 
-                if (tickSpeed) {
-                    setSpeed(tickSpeed);
-                }
-
-                if (log_line.trim().length > 0) {
-                    setNumFilesProcessed(prev => prev + 1);
-
-                    const time = new Date().toLocaleTimeString('en-US', { hour12: false });
-                    // Basic heuristic: if there's progress, it's active. If it's a new file without progress, it was skipped or copied.
-                    const status = tickProgress ? "[ACTIVE]" : "[COPIED]";
-
-                    // Use the file if parsed, or fallback to line log
-                    const filename = current_file || log_line.trim();
-
-                    setLogs((prev) => {
-                        const newLog = { id: logCounter++, time, status, filename };
-                        // Only keep last 100 items for scroll history
-                        return [newLog, ...prev.slice(0, 99)];
+                if (newLogs.length > 0) {
+                    // Reverse because we prepend them and the array from the backend is chronological.
+                    // To maintain chronological order when prepending, we should insert the newest last.
+                    // Wait, we want the newest items at the top of the logs list, which means prepending.
+                    // If we have an array [old, newer, newest], we prepend it so the final array is [newest, newer, old, ...prev]
+                    setLogs(prev => {
+                        return [...newLogs.reverse(), ...prev].slice(0, 100);
                     });
                 }
             });
