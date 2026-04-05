@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -72,45 +72,21 @@ export default function App() {
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [numFilesProcessed, setNumFilesProcessed] = useState(0);
 
+    // Ref to hold batched ticks for frontend-side throttling
+    const tickBufferRef = useRef<TransferTick[]>([]);
+
     useEffect(() => {
         let unlistenTick: (() => void) | undefined;
         let unlistenComplete: (() => void) | undefined;
 
         const setupListeners = async () => {
             unlistenTick = await listen<TransferTick>('transfer-tick', (event) => {
-                const { current_file, progress: tickProgress, speed: tickSpeed, log_line } = event.payload;
-
-                if (current_file) {
-                    setCurrentFile(current_file);
-                }
-
-                if (tickProgress) {
-                    setProgressStr(tickProgress);
-                }
-
-                if (tickSpeed) {
-                    setSpeed(tickSpeed);
-                }
-
-                if (log_line.trim().length > 0) {
-                    setNumFilesProcessed(prev => prev + 1);
-
-                    const time = new Date().toLocaleTimeString('en-US', { hour12: false });
-                    // Basic heuristic: if there's progress, it's active. If it's a new file without progress, it was skipped or copied.
-                    const status = tickProgress ? "[ACTIVE]" : "[COPIED]";
-
-                    // Use the file if parsed, or fallback to line log
-                    const filename = current_file || log_line.trim();
-
-                    setLogs((prev) => {
-                        const newLog = { id: logCounter++, time, status, filename };
-                        // Only keep last 100 items for scroll history
-                        return [newLog, ...prev.slice(0, 99)];
-                    });
-                }
+                tickBufferRef.current.push(event.payload);
             });
 
             unlistenComplete = await listen('transfer-complete', () => {
+                // Ensure we flush any remaining buffer before completing
+                flushBuffer();
                 setIsRunning(false);
                 setIsCompleted(true);
                 setCurrentFile("Transfer fully completed.");
@@ -120,11 +96,54 @@ export default function App() {
 
         setupListeners();
 
+        // Throttle UI updates to roughly 20fps (50ms) to significantly reduce re-renders
+        // without sacrificing visual responsiveness, processing the buffer array.
+        const intervalId = setInterval(flushBuffer, 50);
+
         return () => {
+            clearInterval(intervalId);
             if (unlistenTick) unlistenTick();
             if (unlistenComplete) unlistenComplete();
         };
     }, []);
+
+    const flushBuffer = () => {
+        const batch = tickBufferRef.current;
+        if (batch.length === 0) return;
+
+        tickBufferRef.current = [];
+
+        let latestFile: string | null = null;
+        let latestProgress: string | null = null;
+        let latestSpeed: string | null = null;
+        let newProcessed = 0;
+        const newLogs: LogEntry[] = [];
+        const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+
+        for (const tick of batch) {
+            const { current_file, progress: tickProgress, speed: tickSpeed, log_line } = tick;
+
+            if (current_file) latestFile = current_file;
+            if (tickProgress) latestProgress = tickProgress;
+            if (tickSpeed) latestSpeed = tickSpeed;
+
+            if (log_line.trim().length > 0) {
+                newProcessed++;
+                const status = tickProgress ? "[ACTIVE]" : "[COPIED]";
+                const filename = current_file || log_line.trim();
+                newLogs.push({ id: logCounter++, time, status, filename });
+            }
+        }
+
+        if (latestFile) setCurrentFile(latestFile);
+        if (latestProgress) setProgressStr(latestProgress);
+        if (latestSpeed) setSpeed(latestSpeed);
+
+        if (newProcessed > 0) {
+            setNumFilesProcessed(prev => prev + newProcessed);
+            setLogs(prev => [...newLogs.reverse(), ...prev].slice(0, 100));
+        }
+    };
 
     const handleBrowseSource = async () => {
         if (isRunning) return;
