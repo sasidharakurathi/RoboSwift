@@ -1,0 +1,3 @@
+## 2025-02-14 - React Frontend IPC Throttling for File Transfer Ticks
+**Learning:** High-frequency backend Tauri IPC events (like standard output from robocopy) can cause severe performance issues in React due to excessive re-renders. Attempting to batch these events on the Rust side inside blocking I/O loops (e.g., `reader.lines()`) is a trap, as it causes UI freezing/lag when standard output temporarily pauses.
+**Action:** Always batch and throttle high-frequency events on the *frontend*. Use `useRef` to act as an event buffer array, and process/flush the array locally via a `setInterval` or `requestAnimationFrame` to merge the payload state safely.
