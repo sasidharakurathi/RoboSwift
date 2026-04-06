@@ -1,0 +1,3 @@
+## 2025-02-18 - Input Labels & ARIA Pressed States
+**Learning:** React state-driven toggle buttons (like the Execution Flags in roboswift) inherently lack structural indication of their pressed state to assistive tech unless explicitly provided via attributes like `aria-pressed`. Furthermore, custom styled inputs wrapped in decorative divs require `htmlFor` on labels and corresponding `id` on inputs to be properly linked.
+**Action:** Always verify that custom toggle elements use `aria-pressed={state}` and ensure all labels are programmatically associated with inputs using `htmlFor` and `id`.
