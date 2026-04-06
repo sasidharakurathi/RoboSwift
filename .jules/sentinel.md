@@ -1,0 +1,4 @@
+## 2025-04-06 - Missing Content Security Policy in Tauri Configuration
+**Vulnerability:** The Tauri application was missing a strict Content Security Policy (CSP), as `app.security.csp` in `tauri.conf.json` was set to `null`.
+**Learning:** Without a CSP, the application could be vulnerable to Cross-Site Scripting (XSS) if an attacker manages to inject malicious scripts into the frontend. Tauri v2 relies on standard web view security mechanisms, and explicitly defining a CSP is a fundamental defense-in-depth practice for desktop applications built with web technologies.
+**Prevention:** Always define a restrictive CSP in `tauri.conf.json` that only permits essential resources (e.g., `ipc:` for Tauri backend communication, specific websocket ports for Vite dev server, and explicitly whitelisted domains for external assets like fonts). Never leave `csp: null` in production applications.
