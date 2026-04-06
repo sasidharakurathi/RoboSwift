@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -57,6 +57,8 @@ const FLAG_CONFIG: Record<string, { icon: string; tooltip: string }> = {
 };
 
 export default function App() {
+    const bufferRef = useRef<TransferTick[]>([]);
+
     const [sourcePath, setSourcePath] = useState("C:\\Users\\Admin\\Production\\Assets_2024");
     const [destPath, setDestPath] = useState("Z:\\Backups\\Daily_Archive\\Vault_01");
     const [activeFlags, setActiveFlags] = useState<string[]>(['/MIR', '/MT:16', '/Z']);
@@ -78,36 +80,8 @@ export default function App() {
 
         const setupListeners = async () => {
             unlistenTick = await listen<TransferTick>('transfer-tick', (event) => {
-                const { current_file, progress: tickProgress, speed: tickSpeed, log_line } = event.payload;
-
-                if (current_file) {
-                    setCurrentFile(current_file);
-                }
-
-                if (tickProgress) {
-                    setProgressStr(tickProgress);
-                }
-
-                if (tickSpeed) {
-                    setSpeed(tickSpeed);
-                }
-
-                if (log_line.trim().length > 0) {
-                    setNumFilesProcessed(prev => prev + 1);
-
-                    const time = new Date().toLocaleTimeString('en-US', { hour12: false });
-                    // Basic heuristic: if there's progress, it's active. If it's a new file without progress, it was skipped or copied.
-                    const status = tickProgress ? "[ACTIVE]" : "[COPIED]";
-
-                    // Use the file if parsed, or fallback to line log
-                    const filename = current_file || log_line.trim();
-
-                    setLogs((prev) => {
-                        const newLog = { id: logCounter++, time, status, filename };
-                        // Only keep last 100 items for scroll history
-                        return [newLog, ...prev.slice(0, 99)];
-                    });
-                }
+                // Buffer the incoming ticks instead of immediately updating state
+                bufferRef.current.push(event.payload);
             });
 
             unlistenComplete = await listen('transfer-complete', () => {
@@ -120,9 +94,58 @@ export default function App() {
 
         setupListeners();
 
+        // Drain the buffer periodically to avoid UI lag from rapid IPC events
+        const intervalId = setInterval(() => {
+            if (bufferRef.current.length === 0) return;
+
+            // Extract all buffered events
+            const events = [...bufferRef.current];
+            bufferRef.current = [];
+
+            let latestFile = null;
+            let latestProgress = null;
+            let latestSpeed = null;
+            let filesProcessedInc = 0;
+            const newLogs: LogEntry[] = [];
+
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+
+            // Iterate through the buffer to compute state updates
+            for (const event of events) {
+                const { current_file, progress: tickProgress, speed: tickSpeed, log_line } = event;
+
+                if (current_file) latestFile = current_file;
+                if (tickProgress) latestProgress = tickProgress;
+                if (tickSpeed) latestSpeed = tickSpeed;
+
+                if (log_line.trim().length > 0) {
+                    filesProcessedInc += 1;
+
+                    // Basic heuristic: if there's progress, it's active. If it's a new file without progress, it was skipped or copied.
+                    const status = tickProgress ? "[ACTIVE]" : "[COPIED]";
+                    const filename = current_file || log_line.trim();
+
+                    newLogs.unshift({ id: logCounter++, time, status, filename });
+                }
+            }
+
+            // Batch update component state
+            if (latestFile) setCurrentFile(latestFile);
+            if (latestProgress) setProgressStr(latestProgress);
+            if (latestSpeed) setSpeed(latestSpeed);
+            if (filesProcessedInc > 0) {
+                setNumFilesProcessed(prev => prev + filesProcessedInc);
+                setLogs(prev => {
+                    const combined = [...newLogs, ...prev];
+                    return combined.slice(0, 100);
+                });
+            }
+        }, 100);
+
         return () => {
             if (unlistenTick) unlistenTick();
             if (unlistenComplete) unlistenComplete();
+            clearInterval(intervalId);
         };
     }, []);
 
